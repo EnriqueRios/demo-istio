@@ -1,52 +1,25 @@
-[![Build Status](https://travis-ci.org/IBM/microservices-traffic-management-using-istio.svg?branch=master)](https://travis-ci.org/IBM/microservices-traffic-management-using-istio)
-
-
 # Istio: Traffic Management for your Microservices
 
-*Read this in other languages: [한국어](README-ko.md).*
-
-Microservices and containers changed application design and deployment patterns, but along with them brought challenges like service discovery, routing, failure handling, and visibility to microservices. "Service mesh" architecture was born to handle these features. Applications are getting decoupled internally as microservices, and the responsibility of maintaining coupling between these microservices is passed to the service mesh.
-
-[Istio](https://istio.io/), a joint collaboration between IBM, Google and Lyft provides an easy way to create a service mesh that will manage many of these complex tasks automatically, without the need to modify the microservices themselves. Istio does this by:
-
-1. Deploying a **control plane** that manages the overall network infrastructure and enforces the policy and traffic rules defined by the devops team
-
-2. Deploying a **data plane** which includes “sidecars”, secondary containers that sit along side of each instance of a microservice and act as a proxy to intercept all incoming and outgoing network traffic. Sidecars are implemented using Envoy, an open source edge proxy
-
-Once Istio is installed some of the key feature which it makes available include
-
-- Traffic management using **Istio Pilot**: In addition to providing content and policy based load balancing and routing, Pilot also maintains a canonical representation of services in the mesh.
-
-- Access control using **Istio Auth**: Istio Auth secures the service-to-service communication and also provides a key management system to manage keys and certificates.
-
-- Monitoring, reporting and quota management using **Istio Mixer**: Istio Mixer provides in depth monitoring and logs data collection for microservices, as well as collection of request traces. Precondition checking like whether the service consumer is on whitelist, quota management like rate limits etc. are also configured using Mixer.
-
-In the [first part](#part-a-deploy-sample-bookinfo-application-and-inject-istio-sidecars-to-enable-traffic-flow-management-access-policy-and-monitoring-data-aggregation-for-application) of this journey we show how we can deploy the sample [BookInfo](https://istio.io/docs/samples/bookinfo.html) application and inject sidecars to get the Istio features mentioned above, and walk through the key ones. The BookInfo is a simple application that is composed of four microservices, written in different languages for each of its microservices namely Python, Java, Ruby, and Node.js. The application does not use a database, and stores everything in local filesystem.
-
-Also since Istio tightly controls traffic routing to provide above mentioned benefits, it introduces some drawbacks. Outgoing traffic to external services outside the Istio data plane can only be enabled by specialized configuration, based on the protocol used to connect to the external service.
-
-In the [second part](#part-b-modify-sample-application-to-use-an-external-datasource-deploy-the-application-and-istio-envoys-with-egress-traffic-enabled) of the journey we focus on how Istio can be configured to allow applications to connect to external services. For that we modify the sample BookInfo application to use an external database and then use it as a base to show Istio configuration for enabling egress traffic.
-
-![istio-architecture](images/istio-architecture.png)
-
-## Included Components
-- [Istio](https://istio.io/)
-- [IBM Cloud Kubernetes Service](https://console.ng.bluemix.net/docs/containers/cs_ov.html#cs_ov)
-- [Grafana](http://docs.grafana.org/guides/getting_started)
-- [Jaeger](https://www.jaegertracing.io/)
-- [Prometheus](https://prometheus.io/)
-- [Continuous Delivery Service](https://console.ng.bluemix.net/catalog/services/continuous-delivery)
+*Original repository [HERE](https://github.com/IBM/microservices-traffic-management-using-istio?cm_sp=IBMCode-_-manage-microservices-traffic-using-istio-_-Get-the-Code). This repo has been adapted for Compus Party Uruguay 2019*
 
 # Prerequisite
-Create a Kubernetes cluster with either [Minikube](https://kubernetes.io/docs/getting-started-guides/minikube) for local testing, with [IBM Cloud Private](https://github.com/IBM/deploy-ibm-cloud-private/blob/master/README.md), or with [IBM Cloud Kubernetes Service](https://console.ng.bluemix.net/docs/containers/cs_ov.html#cs_ov) to deploy in cloud. The code here is regularly tested against IBM Cloud Kubernetes Service using Travis.
+Create a Kubernetes cluster in [IBM Cloud Kubernetes Service](https://console.ng.bluemix.net/docs/containers/cs_ov.html#cs_ov) to deploy in cloud.
 
-Create a working directory to clone this repo and to download Istio into:
+Install kubernetes CLI tools and Kubernetes Service plug-in;
 
 ```bash
-$ mkdir ibm
-$ cd ibm
-$ git clone https://github.com/IBM/traffic-management-for-your-microservices-using-istio.git demo
+$ curl -sL https://ibm.biz/idt-installer | bash
 ```
+
+On your machine, create a directory to clone this repo and to download Istio into:
+
+```bash
+$ mkdir istiorepo
+$ cd istiorepo
+$ git clone https://github.com/IBMInnovationLabUY/demo-istio.git
+```
+
+#PRESENTACIÓN
 
 You will also need Istio service mesh installed on top of your Kubernetes cluster.
 Here are the steps (Make sure to change the version to your downloaded one):
@@ -54,9 +27,11 @@ Here are the steps (Make sure to change the version to your downloaded one):
 ```bash
 $ curl -L https://git.io/getLatestIstio | sh -
 $ mv istio-<version> istio # replace with version downloaded
-$ export PATH=$PWD/istio/bin:$PATH
+$ ibmcloud login -a https://api.ng.bluemix.net #If you have a federated ID, use ibmcloud login --sso to get started.
+$ ibmcloud ks region-set <region> #us-south
+$ ibmcloud ks cluster-config <cluster-name> #mycluster
+$ kubectl get nodes #check connection established correctly
 $ kubectl apply -f istio/install/kubernetes/istio-demo.yaml
-
 ```
 
 
@@ -84,7 +59,7 @@ In this part, we will be using the sample BookInfo Application that comes as def
 Envoys are deployed as sidecars on each microservice. Injecting Envoy into your microservice means that the Envoy sidecar would manage the ingoing and outgoing calls for the service. To inject an Envoy sidecar to an existing microservice configuration, do:
 
 ```bash
-$ kubectl apply -f <(istioctl kube-inject -f istio/samples/bookinfo/platform/kube/bookinfo.yaml)
+$ kubectl apply -f <(./istio/bin/istioctl kube-inject -f istio/samples/bookinfo/platform/kube/bookinfo.yaml)
 ```
 
 > `istioctl kube-inject` modifies the yaml file passed in _-f_. This injects Envoy sidecar into your Kubernetes resource configuration. The only resources updated are Job, DaemonSet, ReplicaSet, and Deployment. Other resources in the YAML file configuration will be left unmodified.
@@ -108,17 +83,15 @@ Create an Istio ingress gateway to access your services over a public IP address
 kubectl apply -f  istio/samples/bookinfo/networking/bookinfo-gateway.yaml
 ```
 
-To access your application, you can check the public IP address of your application with the following command. Replace "istio-book" below with the name of your Kubernetes cluster!
+To access your application, you can check the public IP address of your application with the following command.
 Note the IP address will also be different for your cluster.
 
 ```bash
-$ export GATEWAY_URL=$(ibmcloud ks workers istio-book | grep normal | awk '{print $2}' | head -1):$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath={.spec.ports[0].nodePort})
+$ export GATEWAY_URL=$(ibmcloud ks workers <cluster-name> | grep normal | awk '{print $2}' | head -1):$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath={.spec.ports[0].nodePort}) #mycluster
 
-$ echo $GATEWAY_URL 
-169.55.105.75:31380
+$ echo 'Access your application via: http://'$GATEWAY_URL'/productpage' 
+Access your application via: http://169.55.105.75:31380/productpage
 ```
-
-Now you can access your application via:`http://${GATEWAY_URL}/productpage`
 
 If you refresh the page multiple times, you'll see that the _reviews_ section of the page changes. That's because there are 3 versions of **reviews**_(reviews-v1, reviews-v2, reviews-v3)_ deployment for our **reviews** service. Istio’s load-balancer is using a round-robin algorithm to iterate through the 3 instances of this service
 
@@ -139,7 +112,7 @@ This step shows you how to configure where you want your service requests to go 
 Before moving on, we have to define the destination rules. The destination rules tell Istio what versions (subsets in Istio terminology) are available for routing. This step is required before fine-grained traffic shaping is possible.
 
 ```bash
-$  kubectl apply -f samples/bookinfo/networking/destination-rule-all.yaml
+$  kubectl apply -f istio/samples/bookinfo/networking/destination-rule-all.yaml
 destinationrule.networking.istio.io/productpage created
 destinationrule.networking.istio.io/reviews created
 destinationrule.networking.istio.io/ratings created
@@ -153,15 +126,15 @@ For more details, see the [Istio documentation](https://istio.io/docs/tasks/traf
 This would set all incoming routes on the services (indicated in the line `destination: <service>`) to the deployment with a tag `version: v1`. To set the default routes, run:
 
   ```bash
-  $ kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml 
+  $ kubectl apply -f istio/samples/bookinfo/networking/virtual-service-all-v1.yaml 
   ```
 
 * Set Route to `reviews-v2` of **reviews microservice** for a specific user  
 
-This would set the route for the user `jason` (You can login as _jason_ with any password in your deploy web application) to see the `version: v2` of the reviews microservice. Run:
+This would set the route for the user `svergara` (You can login as _svergara_ with any password in your deploy web application) to see the `version: v2` of the reviews microservice. Run:
 
   ```bash
-  $ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml 
+  $ kubectl apply -f istio/samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml 
   ```
 
 * Route 50% of traffic on **reviews microservice** to `reviews-v1` and 50% to `reviews-v3`.  
@@ -171,7 +144,7 @@ This is indicated by the `weight: 50` in the yaml file.
   > Using `replace` should allow you to edit existing route-rules.
 
   ```bash
-  $ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml 
+  $ kubectl apply -f istio/samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml 
   ```
 
 * Route 100% of the traffic to the `version: v3` of the **reviews microservices**  
@@ -179,28 +152,28 @@ This is indicated by the `weight: 50` in the yaml file.
 This will direct all incoming traffic to version v3 of the reviews microservice. Run:
 
   ```bash
-  $ kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-v3.yaml 
+  $ kubectl apply -f istio/samples/bookinfo/networking/virtual-service-reviews-v3.yaml 
   ```
 
 ## 3. Access policy enforcement using Istio Mixer - Configure access control
 
-This step shows you how to control access to your services. It helps to reset the routing rules to ensure that we are starting with a known configuration. The following commands will first set all review requests to v1, and then apply a rule to route requests from user _jason_ to v2, while all others go to v3:
+This step shows you how to control access to your services. It helps to reset the routing rules to ensure that we are starting with a known configuration. The following commands will first set all review requests to v1, and then apply a rule to route requests from user _svergara_ to v2, while all others go to v3:
 
 ```bash
-   kubectl apply -f samples/bookinfo/networking/virtual-service-all-v1.yaml
-   kubectl apply -f samples/bookinfo/networking/virtual-service-reviews-jason-v2-v3.yaml
+   kubectl apply -f istio/samples/bookinfo/networking/virtual-service-all-v1.yaml
+   kubectl apply -f istio/samples/bookinfo/networking/virtual-service-reviews-jason-v2-v3.yaml
 ```
 
-You'll now see that your `productpage` always red stars on the reviews section if not logged in, and always shows black stars when logged in as _jason_.
+You'll now see that your `productpage` always red stars on the reviews section if not logged in, and always shows black stars when logged in as _svergara_.
 
 * To deny access to the ratings service for all traffic coming from `reviews-v3`, you will use apply these rules:
 
   ```bash
-   kubectl apply -f samples/bookinfo/policy/mixer-rule-deny-label.yaml
-   kubectl apply -f samples/bookinfo/policy/mixer-rule-ratings-denial.yaml
+   kubectl apply -f istio/samples/bookinfo/policy/mixer-rule-deny-label.yaml
+   kubectl apply -f istio/samples/bookinfo/policy/mixer-rule-ratings-denial.yaml
   ```
 
-* To verify if your rule has been enforced, point your browser to your BookInfo Applicatio. You'll notice you see no stars from the reviews section unless you are logged in as _jason_, in which case you'll see black stars.
+* To verify if your rule has been enforced, point your browser to your BookInfo Applicatio. You'll notice you see no stars from the reviews section unless you are logged in as _svergara_, in which case you'll see black stars.
 
 ![access-control](images/access.png)
 
@@ -219,23 +192,12 @@ This step shows you how to configure [Istio Mixer](https://istio.io/docs/concept
   prometheus-84bd4b9796-vnb58                 1/1       Running     0          4d
   ```
 
-* Verify that your **Grafana** dashboard is ready. Get the IP of your cluster `bx cs workers <your-cluster-name>` and then the NodePort of your Grafana service `kubectl get svc | grep grafana` or you can run the following command to output both:
-
-  ```bash
-  $ kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=grafana \
-  -o jsonpath='{.items[0].metadata.name}') 3000:3000
-  ```
-  Point your browser to http://localhost:3000  
-
-  Your dashboard should look like this:  
-  ![Grafana-Dashboard](images/grafana.png)
-
 * To collect new telemetry data, you will apply a mixer rule. For this sample, you will generate logs for Response Size for Reviews service. The configuration YAML file is provided within the BookInfo sample folder.
 
 * Create the configuration on Istio Mixer using the configuration in [new-metrics-rule.yaml](new-metrics-rule.yaml)
 `
   ```bash
-  $ kubectl apply -f new-metrics-rule.yaml 
+  $ kubectl apply -f demo-istio/new-metrics-rule.yaml 
   metric.config.istio.io/doublerequestcount created
   prometheus.config.istio.io/doublehandler created
   rule.config.istio.io/doubleprom created
@@ -250,25 +212,21 @@ This step shows you how to configure [Istio Mixer](https://istio.io/docs/concept
   rule.config.istio.io/newlogstdio unchanged
 	```
  
-* Send traffic to that service by refreshing your browser to `http://${GATEWAY_URL}/productpage` multiple times. Alternately, the `watch` command allows you to easily
-call the productpage URL and watch the activity in the Grafana dashboard:
+* Verify that your **Grafana** dashboard is ready. Get the IP of your cluster `bx cs workers <your-cluster-name>` and then the NodePort of your Grafana service `kubectl get svc | grep grafana` or you can run the following command to output both:
 
   ```bash
-  $ watch -n 1 curl -s http://${GATEWAY_URL}/productpage
+  $ kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=grafana -o jsonpath='{.items[0].metadata.name}') 3000:3000
   ```
+  Point your browser to http://localhost:3000  
+
+  Your dashboard should look like this:  
+  ![Grafana-Dashboard](images/grafana.png)
+
+* Send traffic to that service by refreshing your browser to `http://${GATEWAY_URL}/productpage` multiple times.
 
 * Verify that the new metric is being collected by going to your Grafana dashboard again. The graph on the rightmost should now be populated.
 
 ![grafana-new-metric](images/grafana-new-metric.png)
-
-* Verify that the logs stream has been created and is being populated for requests
-
-  ```bash
-  $ kubectl -n istio-system logs $(kubectl -n istio-system get pods -l istio=mixer -o jsonpath='{.items[0].metadata.name}') mixer | grep \"instance\":\"newlog.logentry.istio-system\"
-
-  {"level":"warn","ts":"2017-09-21T04:33:31.249Z","instance":"newlog.logentry.istio-system","destination":"details","latency":"6.848ms","responseCode":200,"responseSize":178,"source":"productpage","user":"unknown"}
-  ...
-  ```
 
 [Collecting Metrics and Logs on Istio](https://istio.io/docs/tasks/telemetry/metrics-logs.html)
 
@@ -287,7 +245,7 @@ Jaeger is a distributed tracing tool that is available with Istio.
   Your dashboard should like this:
   ![jaeger](images/jaeger1.png)
 
-* Send traffic to that service by refreshing your browser to `http://${GATEWAY_URL}/productpage` multiple times. You can also do reuse the `watch` command from earlier.
+* Send traffic to that service by refreshing your browser to `http://${GATEWAY_URL}/productpage` multiple times. 
 
 * Go to your Jeger Dashboard again and you will see a number of traces done. _Click on Find Traces button to see the recent traces (previous hour by default.)
 
