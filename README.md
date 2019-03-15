@@ -259,8 +259,6 @@ Jaeger is a distributed tracing tool that is available with Istio.
 $ kubectl delete -f istio/install/kubernetes/istio-demo.yaml
 ```
 
-* To delete the BookInfo app and its route-rules: `./istio/samples/bookinfo/platform/kube/cleanup.sh`
-
 # References
 [Istio.io](https://istio.io/docs/tasks/)
 # License
